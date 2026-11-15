@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -63,6 +64,9 @@ public class ProjectServiceImpl implements ProjectService {
 
     /** 列表默认返回上限（防止无界全表查询）。 */
     private static final String LIMIT_SQL = "LIMIT 200";
+
+    /** 同时解压的许可数：解压占 IO/CPU，限制并发避免拖垮扫描（见 04-7 §4.5）。 */
+    private static final Semaphore UNZIP_PERMITS = new Semaphore(2);
 
     private final ProjectMapper projectMapper;
     private final UploadProperties uploadProperties;
@@ -140,7 +144,14 @@ public class ProjectServiceImpl implements ProjectService {
             throw new BusinessException(ResultCode.INVALID_ZIP, ex);
         }
 
-        // ③ UUID 落盘（禁止用原始文件名做路径）
+        // ③ 解压限流：解压是 IO + CPU 密集操作，最多允许 2 个同时进行，
+        //    避免把磁盘与扫描线程饿死（见 04-7 §4.5）
+        if (!UNZIP_PERMITS.tryAcquire()) {
+            LOG.warn("解压并发已满，拒绝上传 name={}", originalName);
+            throw new BusinessException(ResultCode.SERVER_BUSY);
+        }
+
+        // ④ UUID 落盘（禁止用原始文件名做路径）
         String uuid = UUID.randomUUID().toString().replace("-", "");
         Path root = Paths.get(uploadProperties.getRoot()).toAbsolutePath().normalize();
         Path dir = root.resolve(uuid);
@@ -174,6 +185,8 @@ public class ProjectServiceImpl implements ProjectService {
             deleteQuietly(dir);
             LOG.warn("保存上传文件失败 name={}", originalName, ex);
             throw new BusinessException(ResultCode.INVALID_ZIP, ex);
+        } finally {
+            UNZIP_PERMITS.release();
         }
     }
 
