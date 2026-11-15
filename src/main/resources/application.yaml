@@ -56,3 +56,5 @@ depcheck:
       core: 1
       max: 2
       queue: 8
+    # 官方 CLI 路径：仅一致性自检（/api/dev/parity）使用
+    cli-path: D:/dc/dependency-check/bin/dependency-check.bat

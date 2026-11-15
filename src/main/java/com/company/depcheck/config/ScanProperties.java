@@ -68,6 +68,17 @@ public class ScanProperties {
         this.pool = pool;
     }
 
+    /** 官方 CLI 路径，用于一致性自检（CLI vs 进程内比对）。 */
+    private String cliPath = "D:/dc/dependency-check/bin/dependency-check.bat";
+
+    public String getCliPath() {
+        return cliPath;
+    }
+
+    public void setCliPath(String cliPath) {
+        this.cliPath = cliPath;
+    }
+
     /**
      * 线程池配置。
      *
