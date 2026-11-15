@@ -1,0 +1,351 @@
+{
+  "item": [
+    {
+      "name": "01 健康检查 /api/ping",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "ping"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/ping"
+        },
+        "header": [],
+        "method": "GET"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+              "pm.test('data.app=depcheck', () => pm.expect(b.data.app).to.eql('depcheck'));",
+              "pm.test('响应头有 X-Trace-Id', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 项目列表 /api/projects",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects"
+        },
+        "header": [],
+        "method": "GET"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+              "pm.test('data 是数组', () => pm.expect(b.data).to.be.an('array'));",
+              "pm.test('不暴露 storagePath', () => { const s = JSON.stringify(b.data); pm.expect(s).to.not.include('storagePath'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 详情-不存在 /api/projects/999",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects",
+            "999"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects/999"
+        },
+        "header": [],
+        "method": "GET"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('code=1003', () => pm.expect(b.code).to.eql(1003));",
+              "pm.test('message=资源不存在', () => pm.expect(b.message).to.eql('资源不存在'));",
+              "pm.test('data=null', () => pm.expect(b.data).to.eql(null));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 上传-正常 zip（应成功）",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects",
+            "upload"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects/upload"
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\sample-project.zip",
+              "type": "file",
+              "key": "file"
+            }
+          ]
+        },
+        "header": [],
+        "method": "POST"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+              "pm.test('返回 id', () => pm.expect(b.data.id).to.be.a('number').and.above(0));",
+              "pm.test('fileCount>=1', () => pm.expect(b.data.fileCount).to.be.at.least(1));",
+              "pm.test('originalName 以 .zip 结尾', () => pm.expect(b.data.originalName).to.match(/\\\\.zip$/i));",
+              "pm.collectionVariables.set('lastProjectId', String(b.data.id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 上传-不是 zip（应 2002）",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects",
+            "upload"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects/upload"
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\not-a-zip.txt",
+              "type": "file",
+              "key": "file"
+            }
+          ]
+        },
+        "header": [],
+        "method": "POST"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
+              "pm.test('message=不是合法的 ZIP 文件', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 上传-伪装 zip（改后缀，应 2002）",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects",
+            "upload"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects/upload"
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\disguised.zip",
+              "type": "file",
+              "key": "file"
+            }
+          ]
+        },
+        "header": [],
+        "method": "POST"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
+              "pm.test('后缀骗过了、魔数没过', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 上传-Zip Slip（应 2002）",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects",
+            "upload"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects/upload"
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\zip-slip.zip",
+              "type": "file",
+              "key": "file"
+            }
+          ]
+        },
+        "header": [],
+        "method": "POST"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
+              "pm.test('命中路径穿越拦截', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 上传-空文件（应 1001）",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects",
+            "upload"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects/upload"
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\empty.zip",
+              "type": "file",
+              "key": "file"
+            }
+          ]
+        },
+        "header": [],
+        "method": "POST"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('code=1001', () => pm.expect(b.code).to.eql(1001));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 上传后列表（应包含刚上传的项目）",
+      "request": {
+        "url": {
+          "path": [
+            "api",
+            "projects"
+          ],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "raw": "{{baseUrl}}/api/projects"
+        },
+        "header": [],
+        "method": "GET"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b = pm.response.json();",
+              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+              "pm.test('至少 1 个项目', () => pm.expect(b.data.length).to.be.at.least(1));",
+              "pm.test('能查到刚上传的 id', () => { const id = Number(pm.collectionVariables.get('lastProjectId')); pm.expect(b.data.some(x => x.id === id)).to.be.true; });"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "value": "http://127.0.0.1:8080",
+      "key": "baseUrl",
+      "type": "string"
+    }
+  ],
+  "info": {
+    "name": "depcheck API（D5 全量）",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "依赖安全与合规分析平台 · D4 骨架 + D5 上传接口验证。运行前先启动服务（IDEA Run 或 mvn spring-boot:run）。"
+  }
+}

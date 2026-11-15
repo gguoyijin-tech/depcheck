@@ -1,0 +1,53 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: depcheck
+  datasource:
+    # 文件库：./data/depcheck.mv.db（相对启动目录，务必 gitignore）
+    url: jdbc:h2:file:./data/depcheck;MODE=MySQL;AUTO_SERVER=FALSE;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+logging:
+  level:
+    root: INFO
+    com.company.depcheck: DEBUG
+
+depcheck:
+  upload:
+    # 解压目录：./data/work/{uuid}/，相对启动目录
+    root: ./data/work
+    # 解压后总字节上限（2GB），超了按 ZIP 炸弹处理
+    max-uncompressed-bytes: 2147483648
+    # 解压后文件数上限
+    max-file-count: 50000
+
+  scan:
+    # NVD 库目录（必须是已经建好的那套，见 01 手册）
+    data-dir: D:/dc/data
+    # 报告输出根目录，下面按 taskNo 分目录
+    report-root: ./data/reports
+    # 可选：有 Key 时填，没有就留空（不影响 datafeed 建好的库）
+    nvd-api-key: ""
+    # 内嵌模式下绝不允许自动更新（否则一次扫描等几小时）
+    auto-update: false
