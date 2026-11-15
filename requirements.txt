@@ -1,0 +1,52 @@
+# 应用依赖安全与合规分析平台 · 组件与版本清单
+#
+# 说明：本文件不是 pip 的 requirements，而是一份"环境与组件版本清单"，
+#       目的是让任何人拿到仓库后能一次装出同样的环境。
+#       Java 依赖的真实来源是 pom.xml，这里只是把版本号摆出来 + 说明为什么锁这些版本。
+#       最后更新：2026-11-15
+
+# ────────────────────────────── 运行环境 ──────────────────────────────
+jdk==21.0.9                 # Oracle JDK，JAVA_HOME=D:\java1；Boot 3.2 与 DC 12 均支持
+maven==3.9.16               # 构建工具；也可用仓库自带 mvnw（会自己拉 Maven）
+
+# ────────────────────────────── 后端依赖（pom.xml 已锁定）──────────────────────────────
+spring-boot-starter-parent==3.2.12
+spring-boot-starter-web==3.2.12
+spring-boot-starter-validation==3.2.12
+spring-boot-starter-test==3.2.12
+mybatis-plus-spring-boot3-starter==3.5.5      # 必须是 spring-boot3-starter（jakarta 版）
+h2==2.3.232                                   # 覆盖 Boot 默认的 2.2.224：要与 DC 的库文件版本一致
+jackson-bom==2.18.2                           # 覆盖 Boot 默认的 2.15.4：DC 12.1.0 按 2.18 编译
+commons-lang3==3.17.0                         # 覆盖 Boot 默认的 3.13.0，否则出报告时 NoSuchMethodError
+commons-codec==1.18.0                         # 同上，对齐 DC 的传递依赖
+
+# ────────────────────────────── 扫描引擎 ──────────────────────────────
+dependency-check-core==12.1.0                 # 进程内调用；9.x 无法解析 NVD 2.0 的 cveTags/affected 字段
+dependency-check-utils==12.1.0                # 由 core 传递引入
+dependency-check-cli==12.1.0                  # 可选：本地命令行验证用（D:\dc\dependency-check）
+nvd-datafeed-snapshot==2026-11-04             # NVD 漏洞库快照，663 MB / 26 个数据文件（不入库，可重建）
+
+# ────────────────────────────── 前端（规划中，D9 起）──────────────────────────────
+vue==3.4.x
+element-plus==2.7.x
+vite==5.x
+pinia==2.x
+axios==1.x
+
+# ────────────────────────────── 工具链 ──────────────────────────────
+git==2.55.0.windows.5
+node==22.12.0                # 前端构建；与 Vite 5 兼容
+npm==10.9.0
+python==3.13.13              # 仅用于本地辅助脚本（造测试 ZIP、查库），不参与部署
+intellij-idea==2025.3.2      # 开发 IDE（社区版无 Spring 向导，可用 start.spring.io）
+
+# ────────────────────────────── 部署（规划中，D15）──────────────────────────────
+docker==29.6.1
+docker-compose==v2
+nginx==1.24
+h2-database-file==2.3.232    # 业务库与 NVD 库是两个独立文件，不要混用
+
+# ────────────────────────────── 版本纪律 ──────────────────────────────
+# 1. 所有版本写死，禁止"最新稳定版"；新增依赖必须走一次评审。
+# 2. h2 / jackson / commons-lang3 / commons-codec 四项是"为兼容 DC 而覆盖"，不要改回 Boot 默认值。
+# 3. 升级 DC 版本时，必须同步检查这四项，并重跑一次完整扫描（deps≈85 / vulns≈53）。

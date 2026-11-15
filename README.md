@@ -83,6 +83,7 @@ depcheck/
 │  ├─ schema.sql  建表脚本（启动自动执行）
 │  └─ logback-spring.xml
 ├─ postman/       Postman 集合 + 测试用 ZIP（正常/非 ZIP/伪装/Zip Slip/空包）
+├─ requirements.txt  组件与版本清单（环境复现用，不是 pip 依赖）
 └─ pom.xml
 ```
 
