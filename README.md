@@ -61,7 +61,7 @@
 | 持久化 | H2 嵌入式（文件库）+ MyBatis-Plus 3.5.5 |
 | 引擎 | OWASP Dependency-Check Core 12.1.0（进程内调用） |
 | 构建 | Maven 3.9.16 |
-| 前端（规划） | Vue 3.4 + Element Plus + Vite |
+| 前端 | Vue 3.4 + Element Plus 2.7 + Vite 5 + Pinia + axios |
 
 > 版本全部锁定。`h2` / `jackson` / `commons-lang3` 三个版本属性是为兼容 DC 12.1.0 而覆盖的，**不要随意改回默认值**——否则出报告时会 `NoSuchMethodError`。
 
@@ -70,24 +70,28 @@
 ```
 depcheck/
 ├─ src/main/java/com/company/depcheck
-│  ├─ common      统一响应 / 全局异常 / traceId / ZIP 工具
-│  ├─ config      线程池、上传与扫描配置
-│  ├─ controller  接口层（项目、任务）
+│  ├─ common      统一响应 / 全局异常 / traceId / ZIP 工具 / 任务状态常量
+│  ├─ config      线程池、超时看门狗、上传与扫描配置
+│  ├─ controller  接口层（项目、任务、健康检查）
 │  ├─ service     业务层（项目、扫描结果入库、任务）
+│  ├─ task        任务调度器与执行器（ScanTaskDispatcher / ScanTaskWorker）
 │  ├─ mapper      MyBatis-Plus Mapper
 │  ├─ model       entity / dto / vo
-│  ├─ engine      引擎抽象与进程内实现（不依赖 service/mapper）
-│  └─ dev         临时调试入口（D8 后删除）
+│  └─ engine      引擎抽象与进程内实现（不依赖 service/mapper）
 ├─ src/main/resources
 │  ├─ application.yaml
 │  ├─ schema.sql  建表脚本（启动自动执行）
 │  └─ logback-spring.xml
-├─ postman/       Postman 集合 + 测试用 ZIP（正常/非 ZIP/伪装/Zip Slip/空包）
+├─ web/           前端 SPA（Vue 3 + Element Plus + Vite，D9 骨架）
+│  ├─ src/api     axios 封装（自动带 X-Session-Id、统一错误提示）
+│  ├─ src/views   登录 / 上传 / 任务列表 / 任务详情
+│  └─ vite.config.js   /api 代理到后端
+├─ postman/       Postman 集合（23 条请求）+ 测试用 ZIP + 使用说明
 ├─ requirements.txt  组件与版本清单（环境复现用，不是 pip 依赖）
 └─ pom.xml
 ```
 
-后续将增加 `web/`（前端）与 `docs/`（文档集）。
+`docs/`（文档集）待补充。
 
 ## 六、快速开始
 
@@ -108,6 +112,16 @@ curl http://127.0.0.1:8080/api/ping
 
 首次启动自动执行 `schema.sql` 建表，业务库落在 `./data/depcheck.mv.db`。
 
+```bash
+# 4. 前端（另开一个终端；需要 Node 20/22）
+cd web
+npm install
+npm run dev        # 打开 http://localhost:5173 ，/api 已代理到 8080
+```
+
+后端换了端口时：`VITE_API_TARGET=http://127.0.0.1:18081 npm run dev`。
+生产构建 `npm run build` 产出 `web/dist/`，D15 由 Nginx 托管（前端用 hash 路由，不需要服务端 rewrite）。
+
 ## 七、接口一览
 
 | 方法 | 路径 | 说明 | 状态 |
@@ -116,10 +130,10 @@ curl http://127.0.0.1:8080/api/ping
 | GET | `/api/projects` | 当前会话的项目列表 | ✅ |
 | GET | `/api/projects/{id}` | 项目详情 | ✅ |
 | POST | `/api/projects/upload` | 上传 ZIP（form-data，字段名 `file`） | ✅ |
-| POST | `/api/scan-tasks` | 创建扫描任务 | 🚧 |
-| GET | `/api/scan-tasks/{id}` | 任务状态与进度 | 🚧 |
-| GET | `/api/scan-tasks` | 任务列表（按状态筛选） | 🚧 |
-| POST | `/api/scan-tasks/{id}/cancel` | 取消任务 | 🚧 |
+| POST | `/api/scan-tasks` | 创建扫描任务 | ✅ |
+| GET | `/api/scan-tasks/{id}` | 任务状态与进度 | ✅ |
+| GET | `/api/scan-tasks` | 任务列表（按状态筛选） | ✅ |
+| POST | `/api/scan-tasks/{id}/cancel` | 取消任务 | ✅ |
 
 统一响应：`{"code":0,"message":"success","data":...}`；错误码分段：`1xxx` 通用、`2xxx` 上传、`3xxx` 扫描、`4xxx` 报告。
 会话隔离通过请求头 `X-Session-Id`，未传默认 `default`。
@@ -144,9 +158,11 @@ curl http://127.0.0.1:8080/api/ping
 - [x] D5 ZIP 上传（含 5 类安全用例）
 - [x] D6 进程内扫描（85 依赖 / 53 漏洞 / 15 秒）
 - [x] D7 报告解析与批量入库
-- [ ] D8 任务异步化（状态机 / 进度 / 取消）
-- [ ] D9–D11 前端页面与联调
-- [ ] D12–D13 HTML 报告定制 + Excel 导出
+- [x] D8 任务异步化（状态机 / 进度 / 取消 / 超时 / 队列拒绝）
+- [x] D9 前端骨架（`web/`：登录 · 上传 · 任务列表 · 任务详情）
+- [ ] D9-联调 浏览器实测（上传 petclinic → 看到 85 / 53）
+- [ ] D10 结果页（依赖 / 漏洞 / 许可证）
+- [ ] D11–D13 HTML 报告定制 + 导出
 - [ ] D14 许可证合规与白名单
 - [ ] D15 Docker Compose 部署
 - [ ] D16–D19 文档定稿与导出 PDF

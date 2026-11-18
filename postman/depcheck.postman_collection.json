@@ -1,351 +1,780 @@
 {
+  "info": {
+    "name": "depcheck API（D5–D8 全量）",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "依赖安全与合规分析平台 · 上传(D5) + 扫描任务(D8) 全量验证。\n\n用法：先启动后端（IDEA Run 或 java -jar target/depcheck-1.0.0.jar），把集合变量 baseUrl 指到实际端口。\n按文件夹顺序跑：01 → 02 → 03。02 里的 10 会自动保存 taskId，后续请求都用它。\n详见 postman/README.md。"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080", "type": "string" },
+    { "key": "sessionId", "value": "d8test", "type": "string" },
+    { "key": "otherSessionId", "value": "someone-else", "type": "string" },
+    { "key": "projectId", "value": "", "type": "string" },
+    { "key": "taskId", "value": "", "type": "string" },
+    { "key": "taskNo", "value": "", "type": "string" },
+    { "key": "cancelTaskId", "value": "", "type": "string" },
+    { "key": "pollCount", "value": "0", "type": "string" },
+    { "key": "lastStatus", "value": "", "type": "string" },
+    { "key": "pressureOk", "value": "0", "type": "string" },
+    { "key": "pressureBusy", "value": "0", "type": "string" }
+  ],
   "item": [
     {
-      "name": "01 健康检查 /api/ping",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "ping"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/ping"
-        },
-        "header": [],
-        "method": "GET"
-      },
-      "event": [
+      "name": "00 健康检查",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-              "const b = pm.response.json();",
-              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
-              "pm.test('data.app=depcheck', () => pm.expect(b.data.app).to.eql('depcheck'));",
-              "pm.test('响应头有 X-Trace-Id', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.be.a('string').and.not.empty);"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "02 项目列表 /api/projects",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects"
-        },
-        "header": [],
-        "method": "GET"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
-              "pm.test('data 是数组', () => pm.expect(b.data).to.be.an('array'));",
-              "pm.test('不暴露 storagePath', () => { const s = JSON.stringify(b.data); pm.expect(s).to.not.include('storagePath'); });"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "03 详情-不存在 /api/projects/999",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects",
-            "999"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects/999"
-        },
-        "header": [],
-        "method": "GET"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('code=1003', () => pm.expect(b.code).to.eql(1003));",
-              "pm.test('message=资源不存在', () => pm.expect(b.message).to.eql('资源不存在'));",
-              "pm.test('data=null', () => pm.expect(b.data).to.eql(null));"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "04 上传-正常 zip（应成功）",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects",
-            "upload"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects/upload"
-        },
-        "body": {
-          "mode": "formdata",
-          "formdata": [
+          "name": "01 健康检查 /api/ping",
+          "event": [
             {
-              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\sample-project.zip",
-              "type": "file",
-              "key": "file"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('data.app=depcheck', () => pm.expect(b.data.app).to.eql('depcheck'));",
+                  "pm.test('响应头有 X-Trace-Id', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
             }
-          ]
-        },
-        "header": [],
-        "method": "POST"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
-              "pm.test('返回 id', () => pm.expect(b.data.id).to.be.a('number').and.above(0));",
-              "pm.test('fileCount>=1', () => pm.expect(b.data.fileCount).to.be.at.least(1));",
-              "pm.test('originalName 以 .zip 结尾', () => pm.expect(b.data.originalName).to.match(/\\\\.zip$/i));",
-              "pm.collectionVariables.set('lastProjectId', String(b.data.id));"
-            ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ping",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ping"]
+            }
           }
         }
       ]
     },
     {
-      "name": "05 上传-不是 zip（应 2002）",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects",
-            "upload"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects/upload"
-        },
-        "body": {
-          "mode": "formdata",
-          "formdata": [
+      "name": "01 项目与上传（D5）",
+      "item": [
+        {
+          "name": "02 项目列表 /api/projects",
+          "event": [
             {
-              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\not-a-zip.txt",
-              "type": "file",
-              "key": "file"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('data 是数组', () => pm.expect(b.data).to.be.an('array'));",
+                  "pm.test('不暴露 storagePath', () => pm.expect(JSON.stringify(b.data)).to.not.include('storagePath'));"
+                ]
+              }
             }
-          ]
-        },
-        "header": [],
-        "method": "POST"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
-              "pm.test('message=不是合法的 ZIP 文件', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
-            ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            }
           }
-        }
-      ]
-    },
-    {
-      "name": "06 上传-伪装 zip（改后缀，应 2002）",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects",
-            "upload"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects/upload"
         },
-        "body": {
-          "mode": "formdata",
-          "formdata": [
+        {
+          "name": "03 项目详情-不存在 /api/projects/999999",
+          "event": [
             {
-              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\disguised.zip",
-              "type": "file",
-              "key": "file"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=1003', () => pm.expect(b.code).to.eql(1003));",
+                  "pm.test('message=资源不存在', () => pm.expect(b.message).to.eql('资源不存在'));",
+                  "pm.test('data=null', () => pm.expect(b.data).to.eql(null));"
+                ]
+              }
             }
-          ]
-        },
-        "header": [],
-        "method": "POST"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
-              "pm.test('后缀骗过了、魔数没过', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
-            ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "999999"]
+            }
           }
-        }
-      ]
-    },
-    {
-      "name": "07 上传-Zip Slip（应 2002）",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects",
-            "upload"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects/upload"
         },
-        "body": {
-          "mode": "formdata",
-          "formdata": [
+        {
+          "name": "04 上传-正常 zip（保存 projectId）",
+          "event": [
             {
-              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\zip-slip.zip",
-              "type": "file",
-              "key": "file"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('返回 id', () => pm.expect(b.data.id).to.be.a('number').and.above(0));",
+                  "pm.test('fileCount>=1', () => pm.expect(b.data.fileCount).to.be.at.least(1));",
+                  "pm.test('originalName 以 .zip 结尾', () => pm.expect(b.data.originalName).to.match(/\\.zip$/i));",
+                  "pm.collectionVariables.set('projectId', String(b.data.id));"
+                ]
+              }
             }
-          ]
-        },
-        "header": [],
-        "method": "POST"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
-              "pm.test('命中路径穿越拦截', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
-            ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\sample-project.zip"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "upload"]
+            }
           }
-        }
-      ]
-    },
-    {
-      "name": "08 上传-空文件（应 1001）",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects",
-            "upload"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects/upload"
         },
-        "body": {
-          "mode": "formdata",
-          "formdata": [
+        {
+          "name": "05 上传-不是 zip（应 2002）",
+          "event": [
             {
-              "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\empty.zip",
-              "type": "file",
-              "key": "file"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
+                  "pm.test('message=不是合法的 ZIP 文件', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
+                ]
+              }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\not-a-zip.txt"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "upload"]
+            }
+          }
         },
-        "header": [],
-        "method": "POST"
-      },
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('code=1001', () => pm.expect(b.code).to.eql(1001));"
-            ]
+          "name": "06 上传-伪装 zip（应 2002）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
+                  "pm.test('后缀骗过了、魔数没过', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\disguised.zip"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "upload"]
+            }
+          }
+        },
+        {
+          "name": "07 上传-Zip Slip（应 2002）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=2002', () => pm.expect(b.code).to.eql(2002));",
+                  "pm.test('命中路径穿越拦截', () => pm.expect(b.message).to.eql('不是合法的 ZIP 文件'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\zip-slip.zip"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "upload"]
+            }
+          }
+        },
+        {
+          "name": "08 上传-空文件（应 1001）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=1001', () => pm.expect(b.code).to.eql(1001));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "E:\\one drive\\OneDrive\\Desktop\\cv push\\online project\\backend\\depcheck\\postman\\testdata\\empty.zip"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "upload"]
+            }
+          }
+        },
+        {
+          "name": "09 上传后列表包含刚上传的项目",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('至少 1 个项目', () => pm.expect(b.data.length).to.be.at.least(1));",
+                  "pm.test('能查到刚上传的 id', () => { const id = Number(pm.collectionVariables.get('projectId')); pm.expect(b.data.some(x => x.id === id)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            }
           }
         }
       ]
     },
     {
-      "name": "09 上传后列表（应包含刚上传的项目）",
-      "request": {
-        "url": {
-          "path": [
-            "api",
-            "projects"
-          ],
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "raw": "{{baseUrl}}/api/projects"
-        },
-        "header": [],
-        "method": "GET"
-      },
-      "event": [
+      "name": "02 扫描任务（D8）",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const b = pm.response.json();",
-              "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
-              "pm.test('至少 1 个项目', () => pm.expect(b.data.length).to.be.at.least(1));",
-              "pm.test('能查到刚上传的 id', () => { const id = Number(pm.collectionVariables.get('lastProjectId')); pm.expect(b.data.some(x => x.id === id)).to.be.true; });"
-            ]
+          "name": "10 创建任务（保存 taskId，重置轮询计数）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('返回 taskId', () => pm.expect(b.data.id).to.be.a('number').and.above(0));",
+                  "pm.test('taskNo 长度 16', () => pm.expect(b.data.taskNo).to.have.lengthOf(16));",
+                  "pm.test('初始状态是 QUEUED 或 RUNNING', () => pm.expect(['QUEUED','RUNNING']).to.include(b.data.status));",
+                  "pm.test('初始 progress=0', () => pm.expect(b.data.progress).to.be.within(0, 100));",
+                  "pm.collectionVariables.set('taskId', String(b.data.id));",
+                  "pm.collectionVariables.set('taskNo', String(b.data.taskNo));",
+                  "pm.collectionVariables.set('pollCount', '0');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Session-Id", "value": "{{sessionId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"]
+            }
+          }
+        },
+        {
+          "name": "11 任务详情-单次",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('id 匹配', () => pm.expect(String(b.data.id)).to.eql(pm.collectionVariables.get('taskId')));",
+                  "pm.test('status 合法', () => pm.expect(['QUEUED','RUNNING','SUCCESS','FAILED','CANCELED']).to.include(b.data.status));",
+                  "pm.test('progress 在 0-100', () => pm.expect(b.data.progress).to.be.within(0, 100));",
+                  "pm.test('stage 非空', () => pm.expect(b.data.stage).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('lastStatus', b.data.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "{{taskId}}"]
+            }
+          }
+        },
+        {
+          "name": "12 轮询直到结束（Runner 用，建议 Delay=1000ms）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "const d = b.data;",
+                  "const allowed = ['QUEUED','RUNNING','SUCCESS','FAILED','CANCELED'];",
+                  "pm.test('status 合法', () => pm.expect(allowed).to.include(d.status));",
+                  "pm.test('progress 在 0-100', () => pm.expect(d.progress).to.be.within(0, 100));",
+                  "pm.collectionVariables.set('lastStatus', d.status);",
+                  "const pending = (d.status === 'QUEUED' || d.status === 'RUNNING');",
+                  "const n = Number(pm.collectionVariables.get('pollCount') || 0) + 1;",
+                  "pm.collectionVariables.set('pollCount', String(n));",
+                  "if (pending && n < 40) {",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  if (pending) {",
+                  "    pm.test('轮询 40 次仍未结束（任务可能卡住，或需调大上限）', () => pm.expect.fail('still ' + d.status + ' at ' + d.progress + '%'));",
+                  "  } else {",
+                  "    pm.test('任务已结束（' + d.status + '）', () => pm.expect(pending).to.be.false);",
+                  "    if (d.status === 'SUCCESS') {",
+                  "      pm.test('SUCCESS 时 progress=100', () => pm.expect(d.progress).to.eql(100));",
+                  "      pm.test('SUCCESS 时 stage=DONE', () => pm.expect(d.stage).to.eql('DONE'));",
+                  "      pm.test('SUCCESS 时 durationMs>0', () => pm.expect(d.durationMs).to.be.above(0));",
+                  "      pm.test('SUCCESS 时 errorCode 为空', () => pm.expect(d.errorCode).to.eql(null));",
+                  "    }",
+                  "    if (d.status === 'FAILED') {",
+                  "      pm.test('FAILED 时 errorCode 非空', () => pm.expect(d.errorCode).to.be.a('number'));",
+                  "    }",
+                  "  }",
+                  "  pm.execution.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "{{taskId}}"]
+            }
+          }
+        },
+        {
+          "name": "13 任务列表",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('data 是数组', () => pm.expect(b.data).to.be.an('array'));",
+                  "pm.test('按 id 倒序', () => { const ids = b.data.map(x => x.id); const sorted = [...ids].sort((x, y) => y - x); pm.expect(ids).to.eql(sorted); });",
+                  "pm.test('包含刚创建的任务', () => { const id = Number(pm.collectionVariables.get('taskId')); pm.expect(b.data.some(x => x.id === id)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"]
+            }
+          }
+        },
+        {
+          "name": "14 任务列表-按状态 SUCCESS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('全部是 SUCCESS', () => b.data.forEach(x => pm.expect(x.status).to.eql('SUCCESS')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks?status=SUCCESS",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"],
+              "query": [{ "key": "status", "value": "SUCCESS" }]
+            }
+          }
+        },
+        {
+          "name": "15 任务列表-非法状态（应 1001）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=1001', () => pm.expect(b.code).to.eql(1001));",
+                  "pm.test('提示含 未知的任务状态', () => pm.expect(b.message).to.include('未知的任务状态'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks?status=BOGUS",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"],
+              "query": [{ "key": "status", "value": "BOGUS" }]
+            }
+          }
+        },
+        {
+          "name": "16 取消已结束的任务（应 1001）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=1001', () => pm.expect(b.code).to.eql(1001));",
+                  "pm.test('提示=任务已结束，无法取消', () => pm.expect(b.message).to.eql('任务已结束，无法取消'));",
+                  "pm.test('前置条件：任务已结束（否则先跑 12）', () => pm.expect(['SUCCESS','FAILED','CANCELED']).to.include(pm.collectionVariables.get('lastStatus')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/{{taskId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "{{taskId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "17 会话隔离-别人查我的任务（应 1003）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=1003', () => pm.expect(b.code).to.eql(1003));",
+                  "pm.test('不泄露存在性（与不存在同样提示）', () => pm.expect(b.message).to.eql('资源不存在'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{otherSessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "{{taskId}}"]
+            }
+          }
+        },
+        {
+          "name": "18 任务详情-不存在（应 1003）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=1003', () => pm.expect(b.code).to.eql(1003));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "999999"]
+            }
+          }
+        },
+        {
+          "name": "19 创建任务-待取消（保存 cancelTaskId）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.collectionVariables.set('cancelTaskId', String(b.data.id));",
+                  "pm.test('已保存 cancelTaskId', () => pm.expect(pm.collectionVariables.get('cancelTaskId')).to.not.be.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Session-Id", "value": "{{sessionId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"]
+            }
+          }
+        },
+        {
+          "name": "20 取消任务（应 code=0）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('data=null', () => pm.expect(b.data).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/{{cancelTaskId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "{{cancelTaskId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "21 查询取消结果（QUEUED→CANCELED 或 RUNNING→执行中，需再等）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0', () => pm.expect(b.code).to.eql(0));",
+                  "pm.test('状态是 CANCELED 或仍在执行', () => pm.expect(['QUEUED','RUNNING','CANCELED']).to.include(b.data.status));",
+                  "pm.test('cancelled 标记已置位', () => pm.expect(b.data.status).to.not.eql('SUCCESS'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Session-Id", "value": "{{sessionId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks/{{cancelTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks", "{{cancelTaskId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 验收补充（Runner）",
+      "item": [
+        {
+          "name": "22 并发提交-3 个任务（Runner: Iterations=3）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('code=0 或 1004（队列满）', () => pm.expect([0, 1004]).to.include(b.code));",
+                  "if (b.code === 0) {",
+                  "  const ok = Number(pm.collectionVariables.get('pressureOk') || 0) + 1;",
+                  "  pm.collectionVariables.set('pressureOk', String(ok));",
+                  "  pm.test('受理的任务状态是 QUEUED/RUNNING', () => pm.expect(['QUEUED','RUNNING']).to.include(b.data.status));",
+                  "} else {",
+                  "  const busy = Number(pm.collectionVariables.get('pressureBusy') || 0) + 1;",
+                  "  pm.collectionVariables.set('pressureBusy', String(busy));",
+                  "}",
+                  "if (pm.info.iteration === pm.info.iterationCount - 1) {",
+                  "  pm.test('统计：受理 ' + pm.collectionVariables.get('pressureOk') + ' / 拒绝 ' + pm.collectionVariables.get('pressureBusy'), () => {",
+                  "    const ok = Number(pm.collectionVariables.get('pressureOk') || 0);",
+                  "    const busy = Number(pm.collectionVariables.get('pressureBusy') || 0);",
+                  "    pm.expect(ok + busy).to.eql(pm.info.iterationCount);",
+                  "  });",
+                  "  pm.collectionVariables.set('pressureOk', '0');",
+                  "  pm.collectionVariables.set('pressureBusy', '0');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Session-Id", "value": "{{sessionId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"]
+            }
+          }
+        },
+        {
+          "name": "23 队列压力-4 个任务（队列=1 时第 4 个应 1004）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.code === 0) {",
+                  "  const ok = Number(pm.collectionVariables.get('pressureOk') || 0) + 1;",
+                  "  pm.collectionVariables.set('pressureOk', String(ok));",
+                  "  pm.test('受理', () => pm.expect(['QUEUED','RUNNING']).to.include(b.data.status));",
+                  "} else {",
+                  "  const busy = Number(pm.collectionVariables.get('pressureBusy') || 0) + 1;",
+                  "  pm.collectionVariables.set('pressureBusy', String(busy));",
+                  "  pm.test('拒绝时 code=1004', () => pm.expect(b.code).to.eql(1004));",
+                  "  pm.test('拒绝时 message=系统繁忙，请稍后重试', () => pm.expect(b.message).to.eql('系统繁忙，请稍后重试'));",
+                  "}",
+                  "if (pm.info.iteration === pm.info.iterationCount - 1) {",
+                  "  pm.test('本轮汇总：受理 ' + pm.collectionVariables.get('pressureOk') + ' / 拒绝 ' + pm.collectionVariables.get('pressureBusy'), () => pm.expect(true).to.be.true);",
+                  "  pm.collectionVariables.set('pressureOk', '0');",
+                  "  pm.collectionVariables.set('pressureBusy', '0');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Session-Id", "value": "{{sessionId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scan-tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan-tasks"]
+            }
           }
         }
       ]
     }
-  ],
-  "variable": [
-    {
-      "value": "http://127.0.0.1:8080",
-      "key": "baseUrl",
-      "type": "string"
-    }
-  ],
-  "info": {
-    "name": "depcheck API（D5 全量）",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "依赖安全与合规分析平台 · D4 骨架 + D5 上传接口验证。运行前先启动服务（IDEA Run 或 mvn spring-boot:run）。"
-  }
+  ]
 }
