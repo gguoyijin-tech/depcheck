@@ -51,9 +51,13 @@ depcheck:
     nvd-api-key: ""
     # 内嵌模式下绝不允许自动更新（否则一次扫描等几小时）
     auto-update: false
+    # 任务超时阈值（分钟）：看门狗每 60 秒检查一次，超时置 FAILED + code=3002
+    # 验收时可临时改 0（立刻超时）；负数表示关闭看门狗
+    timeout-minutes: 30
     # 扫描线程池：4GB 内存约束下"受理 8、并行 2"（依据见 04-7）
+    # 注意 core 才是实际并行度：ThreadPoolExecutor 先占满 core，再排队，最后才扩到 max
     pool:
-      core: 1
+      core: 2
       max: 2
       queue: 8
     # 官方 CLI 路径：仅一致性自检（/api/dev/parity）使用

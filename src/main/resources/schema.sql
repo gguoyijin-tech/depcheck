@@ -64,3 +64,11 @@ CREATE TABLE IF NOT EXISTS vulnerability (
 
 CREATE INDEX IF NOT EXISTS idx_vuln_task ON vulnerability (task_id);
 CREATE INDEX IF NOT EXISTS idx_vuln_dep  ON vulnerability (dependency_id);
+
+-- D8：取消标记与阶段名（取消采用"标记 + 阶段边界检查"，不强行杀线程）
+ALTER TABLE scan_task ADD COLUMN IF NOT EXISTS cancel_requested TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE scan_task ADD COLUMN IF NOT EXISTS stage VARCHAR(32) NULL;
+
+-- 按状态查任务（D9 列表页要用）
+CREATE INDEX IF NOT EXISTS idx_task_status ON scan_task (status);
+CREATE INDEX IF NOT EXISTS idx_task_project ON scan_task (project_id);

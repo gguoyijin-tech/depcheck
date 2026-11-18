@@ -25,6 +25,13 @@ public class ScanProperties {
     /** 是否允许引擎自动更新漏洞库；内嵌模式必须 false，否则一次扫描可能等几小时。 */
     private boolean autoUpdate = false;
 
+    /**
+     * 任务超时阈值（分钟），看门狗据此把卡死的 RUNNING 任务置为 FAILED。
+     *
+     * <p>0 表示"立刻超时"，只用于验收测试；负数表示关闭看门狗。</p>
+     */
+    private int timeoutMinutes = 30;
+
     public String getDataDir() {
         return dataDir;
     }
@@ -57,6 +64,14 @@ public class ScanProperties {
         this.autoUpdate = autoUpdate;
     }
 
+    public int getTimeoutMinutes() {
+        return timeoutMinutes;
+    }
+
+    public void setTimeoutMinutes(int timeoutMinutes) {
+        this.timeoutMinutes = timeoutMinutes;
+    }
+
     /** 扫描线程池参数，对应 depcheck.scan.pool.*。 */
     private Pool pool = new Pool();
 
@@ -85,13 +100,17 @@ public class ScanProperties {
      * <p>默认值依据：4 GB 内存下，单任务峰值 0.4–0.6 GB（大工程 1.2–1.8 GB），
      * 并行 2 个可留出余量给 Tomcat、H2 与解压；队列 8 用于受理。</p>
      *
+     * <p><b>坑</b>：{@code ThreadPoolExecutor} 的扩容顺序是"核心线程 → 队列 → 最大线程"，
+     * 所以 core=1 + queue=8 时永远只有 1 个线程在跑，max=2 根本用不到（D8 实测确认）。
+     * 想要"并行 2"，必须 core=2（本类默认值），max 与 core 保持一致即可。</p>
+     *
      * @author depcheck
      * @since 1.0.0
      */
     public static class Pool {
 
-        /** 核心线程数：常态并行度。 */
-        private int core = 1;
+        /** 核心线程数：常态并行度（= 实际并行度，必须与期望并行数一致）。 */
+        private int core = 2;
 
         /** 最大线程数：突发时最多并行数。 */
         private int max = 2;

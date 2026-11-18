@@ -1,9 +1,8 @@
 package com.company.depcheck.engine;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
+import com.company.depcheck.common.exception.BusinessException;
+import com.company.depcheck.common.result.ResultCode;
+import com.company.depcheck.config.ScanProperties;
 import org.apache.commons.lang3.StringUtils;
 import org.owasp.dependencycheck.Engine;
 import org.owasp.dependencycheck.data.nvdcve.DatabaseException;
@@ -14,9 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import com.company.depcheck.common.exception.BusinessException;
-import com.company.depcheck.common.result.ResultCode;
-import com.company.depcheck.config.ScanProperties;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * 进程内调用 DC 的扫描引擎实现（默认）。
@@ -64,17 +63,20 @@ public class InProcessDcEngine implements ScanEngine {
 
         Settings settings = buildSettings();
         try (Engine engine = new Engine(settings)) {
+            notifyProgress(parameter, 20, "SCAN");
             engine.scan(parameter.getScanPath().toFile());
+
+            notifyProgress(parameter, 40, "ANALYZE");
             try {
                 engine.analyzeDependencies();
             } catch (ExceptionCollection ex) {
-                // 部分分析器失败不影响已收集的结果，记录完整异常后继续出报告
                 LOG.warn("依赖分析部分失败，共 {} 个异常，继续生成报告", ex.getExceptions().size(), ex);
             }
 
-            // 一次只能出一种格式，必须分开调（实测：传 "HTML,JSON" 会报找不到模板）
+            notifyProgress(parameter, 80, "REPORT");
             engine.writeReports(parameter.getProjectName(), outDir.toFile(), FORMAT_HTML);
             engine.writeReports(parameter.getProjectName(), outDir.toFile(), FORMAT_JSON);
+            notifyProgress(parameter, 90, "REPORT");
 
             ScanResult result = new ScanResult();
             result.setDependencyCount(engine.getDependencies().length);
@@ -112,5 +114,10 @@ public class InProcessDcEngine implements ScanEngine {
             settings.setString(Settings.KEYS.NVD_API_KEY, scanProperties.getNvdApiKey());
         }
         return settings;
+    }
+    private void notifyProgress(ScanParameter parameter, int percent, String stage) {
+        if (parameter.getProgressListener() != null) {
+            parameter.getProgressListener().onProgress(percent, stage);
+        }
     }
 }

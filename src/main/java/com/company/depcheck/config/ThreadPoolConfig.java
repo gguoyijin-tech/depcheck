@@ -32,8 +32,8 @@ public class ThreadPoolConfig {
     /** 线程名前缀。 */
     private static final String THREAD_NAME_PREFIX = "dc-scan-";
 
-    /** 兜底核心线程数。 */
-    private static final int FALLBACK_CORE = 1;
+    /** 兜底核心线程数（= 实际并行度）。 */
+    private static final int FALLBACK_CORE = 2;
 
     /** 兜底最大线程数。 */
     private static final int FALLBACK_MAX = 2;

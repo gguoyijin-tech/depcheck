@@ -18,6 +18,8 @@ public class ScanParameter {
 
     /** 报告输出目录。 */
     private Path outputDir;
+    /** 进度回调，可为 null（dev 调试时不传）。 */
+    private ScanProgressListener progressListener;
 
     public String getProjectName() {
         return projectName;
@@ -42,4 +44,13 @@ public class ScanParameter {
     public void setOutputDir(Path outputDir) {
         this.outputDir = outputDir;
     }
+
+    public ScanProgressListener getProgressListener() {
+        return progressListener;
+    }
+
+    public void setProgressListener(ScanProgressListener progressListener) {
+        this.progressListener = progressListener;
+    }
+
 }

@@ -1,6 +1,11 @@
 package com.company.depcheck.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.toolkit.Db;
+import com.company.depcheck.common.constant.TaskStage;
+import com.company.depcheck.common.constant.TaskStatus;
+import com.company.depcheck.common.exception.BusinessException;
+import com.company.depcheck.common.result.ResultCode;
 import com.company.depcheck.engine.report.DependencyJson;
 import com.company.depcheck.engine.report.ReportJson;
 import com.company.depcheck.engine.report.VulnerabilityJson;
@@ -15,15 +20,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
- * 扫描结果入库实现：任务 → 依赖 → 漏洞，全部在一个事务里。
+ * 扫描结果入库实现：任务状态 → 依赖 → 漏洞，全部在一个事务里。
+ *
+ * <p>任务状态用"带前置状态的条件更新"（RUNNING → SUCCESS）落库：
+ * 如果看门狗已经把任务置为 FAILED，这里的更新影响 0 行，整个事务回滚，
+ * 明细不会挂到一个已失败的任务上。</p>
  *
  * @author depcheck
  * @since 1.0.0
@@ -36,8 +45,8 @@ public class ScanPersistServiceImpl implements ScanPersistService {
     /** 批量插入每批条数。 */
     private static final int BATCH_SIZE = 500;
 
-    /** 任务号长度。 */
-    private static final int TASK_NO_LENGTH = 16;
+    /** 成功时的进度。 */
+    private static final int PROGRESS_DONE = 100;
 
     private final ScanTaskMapper scanTaskMapper;
 
@@ -52,36 +61,52 @@ public class ScanPersistServiceImpl implements ScanPersistService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long persist(Long projectId, ReportJson report, long durationMs) {
+    public int persist(Long taskId, ReportJson report) {
         LocalDateTime now = LocalDateTime.now();
-
-        Long taskId = saveTask(projectId, report, durationMs, now);
         List<DependencyJson> deps = report.getDependencies() == null ? List.of() : report.getDependencies();
 
         int depCount = saveDependencies(taskId, deps, now);
         int vulnCount = saveVulnerabilities(taskId, deps, now);
 
+        finishTask(taskId, report, now);
+
         LOG.info("入库完成 taskId={} deps={} vulns={}", taskId, depCount, vulnCount);
-        return taskId;
+        return depCount;
     }
 
     /**
-     * 写任务记录。D8 会改成 QUEUED→RUNNING→SUCCESS 的状态机。
+     * 把任务从 RUNNING 置为 SUCCESS。
+     *
+     * <p>条件更新 {@code where status = 'RUNNING'}：任务若已被取消/超时改写过状态，
+     * 这里影响 0 行，直接抛异常让事务回滚，避免"任务失败但明细入库"的脏数据。</p>
+     *
+     * @param taskId 任务 ID
+     * @param report 解析后的报告
+     * @param now    当前时间
      */
-    private Long saveTask(Long projectId, ReportJson report, long durationMs, LocalDateTime now) {
-        ScanTask task = new ScanTask();
-        task.setTaskNo(UUID.randomUUID().toString().replace("-", "").substring(0, TASK_NO_LENGTH));
-        task.setProjectId(projectId);
-        task.setStatus("SUCCESS");
-        task.setProgress(100);
-        task.setScanMode("BUILD");
-        task.setEngineVersion(report.getScanInfo() == null ? null : report.getScanInfo().getEngineVersion());
-        task.setStartedAt(now.minusNanos(durationMs * 1_000_000L));
-        task.setFinishedAt(now);
-        task.setDurationMs(durationMs);
-        task.setCreatedAt(now);
-        scanTaskMapper.insert(task);
-        return task.getId();
+    private void finishTask(Long taskId, ReportJson report, LocalDateTime now) {
+        ScanTask old = scanTaskMapper.selectById(taskId);
+        if (old == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND.getCode(), "任务不存在：" + taskId);
+        }
+
+        ScanTask update = new ScanTask();
+        update.setStatus(TaskStatus.SUCCESS);
+        update.setProgress(PROGRESS_DONE);
+        update.setStage(TaskStage.DONE);
+        update.setFinishedAt(now);
+        update.setEngineVersion(report.getScanInfo() == null ? null : report.getScanInfo().getEngineVersion());
+        if (old.getStartedAt() != null) {
+            update.setDurationMs(Duration.between(old.getStartedAt(), now).toMillis());
+        }
+
+        int rows = scanTaskMapper.update(update, new LambdaUpdateWrapper<ScanTask>()
+                .eq(ScanTask::getId, taskId)
+                .eq(ScanTask::getStatus, TaskStatus.RUNNING));
+        if (rows == 0) {
+            throw new BusinessException(ResultCode.SCAN_FAILED.getCode(),
+                    "任务状态已变更（可能被取消或超时），本次结果丢弃：taskId=" + taskId);
+        }
     }
 
     /**

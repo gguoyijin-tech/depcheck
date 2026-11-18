@@ -30,6 +30,11 @@ public class ScanTask {
     private Integer errorCode;
     private String errorMsg;
     private LocalDateTime createdAt;
+    /** 是否请求取消：0 否，1 是。 */
+    private Integer cancelRequested;
+
+    /** 当前阶段名，如 PREPARE / SCAN / ANALYZE / REPORT / PERSIST。 */
+    private String stage;
 
     public Long getId() {
         return id;
@@ -141,5 +146,20 @@ public class ScanTask {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Integer getCancelRequested() {
+        return cancelRequested;
+    }
+
+    public void setCancelRequested(Integer cancelRequested) {
+        this.cancelRequested = cancelRequested;
+    }
+
+    public String getStage() {
+        return stage;
+    }
+    public void setStage(String stage) {
+        this.stage = stage;
     }
 }
