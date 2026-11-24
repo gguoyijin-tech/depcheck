@@ -28,6 +28,12 @@ const routes = [
     component: () => import('@/views/TaskDetailView.vue'),
     meta: { title: '任务详情' }
   },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: () => import('@/views/ReportsView.vue'),
+    meta: { title: '报告下载' }
+  },
   { path: '/:pathMatch(.*)*', redirect: '/tasks' }
 ]
 

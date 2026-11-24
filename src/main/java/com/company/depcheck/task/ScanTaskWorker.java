@@ -1,12 +1,9 @@
 package com.company.depcheck.task;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +14,7 @@ import com.company.depcheck.common.constant.TaskStage;
 import com.company.depcheck.common.constant.TaskStatus;
 import com.company.depcheck.common.exception.BusinessException;
 import com.company.depcheck.common.result.ResultCode;
+import com.company.depcheck.common.storage.StorageCleaner;
 import com.company.depcheck.config.ScanProperties;
 import com.company.depcheck.engine.ScanCanceledException;
 import com.company.depcheck.engine.ScanEngine;
@@ -74,6 +72,8 @@ public class ScanTaskWorker {
 
     private final ScanProperties scanProperties;
 
+    private final StorageCleaner storageCleaner;
+
     /**
      * 构造注入。
      *
@@ -86,13 +86,14 @@ public class ScanTaskWorker {
      */
     public ScanTaskWorker(ScanTaskMapper scanTaskMapper, ProjectMapper projectMapper, ScanEngine scanEngine,
                           ReportParser reportParser, ScanPersistService scanPersistService,
-                          ScanProperties scanProperties) {
+                          ScanProperties scanProperties, StorageCleaner storageCleaner) {
         this.scanTaskMapper = scanTaskMapper;
         this.projectMapper = projectMapper;
         this.scanEngine = scanEngine;
         this.reportParser = reportParser;
         this.scanPersistService = scanPersistService;
         this.scanProperties = scanProperties;
+        this.storageCleaner = storageCleaner;
     }
 
     /**
@@ -147,7 +148,7 @@ public class ScanTaskWorker {
             if (current == null || !TaskStatus.RUNNING.equals(current.getStatus())) {
                 LOG.warn("任务状态已变为 {}，丢弃本次结果并清理报告目录 taskId={} outDir={}",
                         current == null ? "NULL" : current.getStatus(), taskId, outDir);
-                deleteQuietly(outDir);
+                storageCleaner.deleteReport(task.getTaskNo());
                 return;
             }
             if (Integer.valueOf(1).equals(current.getCancelRequested())) {
@@ -160,7 +161,7 @@ public class ScanTaskWorker {
             LOG.info("任务完成 taskId={} deps={} 总耗时={}ms", taskId, depCount, result.getDurationMs());
         } catch (ScanCanceledException ex) {
             LOG.info("任务已取消，清理报告目录 taskId={} outDir={}", taskId, outDir);
-            deleteQuietly(outDir);
+            storageCleaner.deleteReport(task.getTaskNo());
             markCanceled(taskId);
         } catch (BusinessException ex) {
             LOG.error("任务失败 taskId={} code={} msg={}", taskId, ex.getCode(), ex.getMessage(), ex);
@@ -280,29 +281,5 @@ public class ScanTaskWorker {
             return null;
         }
         return value.length() <= max ? value : value.substring(0, max);
-    }
-
-    /**
-     * 删除本次任务的报告目录（取消/超时收尾）。
-     *
-     * @param dir 目录
-     */
-    private void deleteQuietly(Path dir) {
-        try {
-            if (!Files.exists(dir)) {
-                return;
-            }
-            try (Stream<Path> paths = Files.walk(dir)) {
-                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
-                    try {
-                        Files.deleteIfExists(path);
-                    } catch (IOException ex) {
-                        LOG.debug("清理报告文件失败 path={}", path, ex);
-                    }
-                });
-            }
-        } catch (IOException ex) {
-            LOG.debug("遍历清理报告目录失败 dir={}", dir, ex);
-        }
     }
 }

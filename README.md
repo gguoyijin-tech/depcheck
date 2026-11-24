@@ -35,7 +35,7 @@
 ```
 浏览器
   │
-  ├─ 前端 SPA（Vue 3 + Element Plus）        ← 规划中，将放在 web/
+  ├─ 前端 SPA（React + Ant Design）           ← 代码在 frontend/
   │
   ├─ Nginx：静态资源 + /api 反代
   │
@@ -61,7 +61,7 @@
 | 持久化 | H2 嵌入式（文件库）+ MyBatis-Plus 3.5.5 |
 | 引擎 | OWASP Dependency-Check Core 12.1.0（进程内调用） |
 | 构建 | Maven 3.9.16 |
-| 前端 | Vue 3.4 + Element Plus 2.7 + Vite 5 + Pinia + axios |
+| 前端 | React 18 + Ant Design 5 + Vite 5 + axios |
 
 > 版本全部锁定。`h2` / `jackson` / `commons-lang3` 三个版本属性是为兼容 DC 12.1.0 而覆盖的，**不要随意改回默认值**——否则出报告时会 `NoSuchMethodError`。
 
@@ -82,7 +82,7 @@ depcheck/
 │  ├─ application.yaml
 │  ├─ schema.sql  建表脚本（启动自动执行）
 │  └─ logback-spring.xml
-├─ web/           前端 SPA（Vue 3 + Element Plus + Vite，D9 骨架）
+├─ frontend/      前端 SPA（React 18 + Ant Design 5 + Vite，D9 骨架）
 │  ├─ src/api     axios 封装（自动带 X-Session-Id、统一错误提示）
 │  ├─ src/views   登录 / 上传 / 任务列表 / 任务详情
 │  └─ vite.config.js   /api 代理到后端
@@ -114,19 +114,22 @@ curl http://127.0.0.1:8080/api/ping
 
 ```bash
 # 4. 前端（另开一个终端；需要 Node 20/22）
-cd web
+cd frontend
 npm install
 npm run dev        # 打开 http://localhost:5173 ，/api 已代理到 8080
 ```
 
 后端换了端口时：`VITE_API_TARGET=http://127.0.0.1:18081 npm run dev`。
-生产构建 `npm run build` 产出 `web/dist/`，D15 由 Nginx 托管（前端用 hash 路由，不需要服务端 rewrite）。
+生产构建 `npm run build` 产出 `frontend/dist/`，D15 由 Nginx 托管（前端用 hash 路由，不需要服务端 rewrite）。
 
 ## 七、接口一览
 
 | 方法 | 路径 | 说明 | 状态 |
 |---|---|---|---|
-| GET | `/api/ping` | 健康检查（返回 traceId） | ✅ |
+| GET | `/api/ping` | 健康检查（返回 traceId，**免鉴权**） | ✅ |
+| POST | `/api/auth/login` | 登录（固定账号，返回 token + 会话标识） | ✅ |
+| POST | `/api/auth/logout` | 退出登录（token 立即失效） | ✅ |
+| GET | `/api/auth/me` | 当前会话信息 | ✅ |
 | GET | `/api/projects` | 当前会话的项目列表 | ✅ |
 | GET | `/api/projects/{id}` | 项目详情 | ✅ |
 | POST | `/api/projects/upload` | 上传 ZIP（form-data，字段名 `file`） | ✅ |
@@ -134,9 +137,14 @@ npm run dev        # 打开 http://localhost:5173 ，/api 已代理到 8080
 | GET | `/api/scan-tasks/{id}` | 任务状态与进度 | ✅ |
 | GET | `/api/scan-tasks` | 任务列表（按状态筛选） | ✅ |
 | POST | `/api/scan-tasks/{id}/cancel` | 取消任务 | ✅ |
+| GET | `/api/scan-tasks/{id}/summary` | 结果概览（依赖/漏洞/等级/许可证分布） | ✅ |
+| GET | `/api/scan-tasks/{id}/dependencies` | 依赖分页（`page/size/keyword/licenseRisk`） | ✅ |
+| GET | `/api/scan-tasks/{id}/vulnerabilities` | 漏洞分页（`page/size/severity`，CVSS 降序） | ✅ |
+| GET | `/api/scan-tasks/{id}/report` | 下载 HTML 报告 | ✅ |
 
 统一响应：`{"code":0,"message":"success","data":...}`；错误码分段：`1xxx` 通用、`2xxx` 上传、`3xxx` 扫描、`4xxx` 报告。
-会话隔离通过请求头 `X-Session-Id`，未传默认 `default`。
+鉴权：除 `/api/ping` 与 `/api/auth/login` 外，所有 `/api/**` 都要带 `Authorization: Bearer <token>`，否则返回 HTTP 401 + code 1002；
+`X-Session-Id` 必须等于登录时服务端签发的会话标识，用于数据隔离（同账号两次登录 = 两个会话，互不可见）。
 
 ## 八、文档体系
 
@@ -159,7 +167,7 @@ npm run dev        # 打开 http://localhost:5173 ，/api 已代理到 8080
 - [x] D6 进程内扫描（85 依赖 / 53 漏洞 / 15 秒）
 - [x] D7 报告解析与批量入库
 - [x] D8 任务异步化（状态机 / 进度 / 取消 / 超时 / 队列拒绝）
-- [x] D9 前端骨架（`web/`：登录 · 上传 · 任务列表 · 任务详情）
+- [x] D9 前端骨架（`frontend/`：React 版，登录 · 上传 · 任务列表 · 任务详情 · 结果页）
 - [ ] D9-联调 浏览器实测（上传 petclinic → 看到 85 / 53）
 - [ ] D10 结果页（依赖 / 漏洞 / 许可证）
 - [ ] D11–D13 HTML 报告定制 + 导出
@@ -173,5 +181,32 @@ npm run dev        # 打开 http://localhost:5173 ，/api 已代理到 8080
 - **H2 嵌入式**，业务库与 DC 的 NVD 库是两个独立文件，不能混用；
 - **不修改 DC 核心源码**，只通过 `Engine` API + 配置调用；
 - 不提交 `data/`、`target/`、`logs/`、`.idea/`（见 `.gitignore`）；
+- **数据保留**：失败任务报告留 24 小时（排障）、成功报告留 7 天、项目留 30 天；
+  到期由 `StorageCleaner` 清理，删项目会级联删任务与明细（`depcheck.retention.*` 可调）；
+- **关键约束在数据库层**：状态/进度/风险等级有 `CHECK`，明细有外键与唯一索引（`schema.sql`），
+  失败或取消的任务不可能留下半量明细；
 - 内网/离线环境：DC 的联网分析器（RetireJS / OSS Index / Central）已在 `InProcessDcEngine` 关闭；
 - 本平台仅用于集团内部，不上传含敏感信息的代码。
+
+## 十一、文档索引
+
+**本仓库内（可直接点开）**
+
+| 文档 | 说明 |
+|---|---|
+| [用户使用手册](docs/用户使用手册.md) | 登录、上传、扫描、结果解读、报告下载、错误码、FAQ |
+| [frontend/README.md](frontend/README.md) | 前端页面、启动方式、接口约定 |
+| [postman/README.md](postman/README.md) | Postman 集合使用说明（先跑 00 登录） |
+
+**项目根目录（与仓库同级，随结项材料提交）**
+
+| 文档 | 说明 |
+|---|---|
+| 00-开发过程记录.md | 按时间线记录每个阶段做了什么、踩了什么坑 |
+| 01-本地环境搭建手册.md | JDK/Maven/DC 安装、NVD 建库、离线镜像、基线 |
+| 02-Dependency-Check-使用步骤.md | 引擎参数、报告解读、白名单、CI 集成 |
+| 04-后端工程搭建步骤.md ~ 04-7 | 骨架、上传、引擎、入库、异步任务、Git、一致性与并发 |
+| 05-整体流程说明.md | 一条数据从上传到出结果的完整链路 |
+| 06-结项冲刺步骤.md | 结项前任务拆解、演示视频分镜、手册与简报大纲 |
+| 07-需求符合性检查.md | PRD 逐章对照与差距清单 |
+| 工具使用手册 | 见上表 `docs/用户使用手册.md` |

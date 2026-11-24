@@ -21,6 +21,9 @@ public class ScanTaskVO {
     private String errorMsg;
     private LocalDateTime createdAt;
 
+    /** 是否还有可下载的 HTML 报告（报告按保留策略清理后会变 false）。 */
+    private Boolean hasReport;
+
     public Long getId() {
         return id;
     }
@@ -99,5 +102,13 @@ public class ScanTaskVO {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getHasReport() {
+        return hasReport;
+    }
+
+    public void setHasReport(Boolean hasReport) {
+        this.hasReport = hasReport;
     }
 }

@@ -4,8 +4,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getProject } from '@/api/project'
-import { cancelTask, createTask, getTask } from '@/api/task'
+import { cancelTask, createTask, getSummary, getTask, listDependencies, listVulnerabilities } from '@/api/task'
 import StatusTag from '@/components/StatusTag.vue'
+import { downloadHtmlReport } from '@/utils/download'
 import {
   formatDateTime,
   formatDuration,
@@ -28,12 +29,24 @@ let timer = null
 const active = computed(() => (task.value ? isActive(task.value.status) : false))
 const progress = computed(() => (task.value && task.value.progress) || 0)
 
+const summary = ref(null)
+const tab = ref('vuln')
+const vuln = ref({ page: 1, size: 10, total: 0, records: [] })
+const dep = ref({ page: 1, size: 10, total: 0, records: [] })
+const vulnLoading = ref(false)
+const depLoading = ref(false)
+const downloadLoading = ref(false)
+
 async function load(silent = false) {
   if (!silent) {
     loading.value = true
   }
   try {
     task.value = await getTask(taskId)
+    if (task.value && task.value.status === 'SUCCESS' && !summary.value) {
+      loadSummary()
+      loadVulns()
+    }
     if (task.value && task.value.projectId && !project.value) {
       try {
         project.value = await getProject(task.value.projectId)
@@ -75,6 +88,51 @@ onUnmounted(() => {
     timer = null
   }
 })
+
+async function loadSummary() {
+  try {
+    summary.value = await getSummary(taskId)
+  } catch {
+    summary.value = null
+  }
+}
+
+async function loadVulns(page = 1) {
+  vulnLoading.value = true
+  try {
+    const data = await listVulnerabilities(taskId, { page, size: vuln.value.size })
+    vuln.value = { ...vuln.value, ...data }
+  } finally {
+    vulnLoading.value = false
+  }
+}
+
+async function loadDeps(page = 1) {
+  depLoading.value = true
+  try {
+    const data = await listDependencies(taskId, { page, size: dep.value.size })
+    dep.value = { ...dep.value, ...data }
+  } finally {
+    depLoading.value = false
+  }
+}
+
+function handleTab(name) {
+  if (name === 'dep' && dep.value.total === 0) {
+    loadDeps()
+  }
+}
+
+async function handleDownload() {
+  downloadLoading.value = true
+  try {
+    await downloadHtmlReport(taskId)
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    downloadLoading.value = false
+  }
+}
 
 async function handleCancel() {
   try {
@@ -134,6 +192,7 @@ async function handleRescan() {
             <StatusTag :status="task.status" />
           </div>
           <div class="head-actions">
+          <el-button v-if="task.hasReport" :loading="downloadLoading" @click="handleDownload">下载报告</el-button>
             <el-button v-if="active" type="warning" :loading="canceling" @click="handleCancel">
               取消任务
             </el-button>
@@ -193,11 +252,41 @@ async function handleRescan() {
         </el-descriptions>
       </el-card>
 
-      <el-card shadow="never" class="card">
+      <template v-if="task.status === 'SUCCESS'">
+        <el-row :gutter="12">
+          <el-col :span="6"><el-card shadow="never" class="stat"><div class="num">{{ summary ? summary.dependencyCount : '-' }}</div><div class="lbl">依赖总数</div></el-card></el-col>
+          <el-col :span="6"><el-card shadow="never" class="stat"><div class="num danger">{{ summary ? summary.vulnerabilityCount : '-' }}</div><div class="lbl">漏洞总数</div></el-card></el-col>
+          <el-col :span="6"><el-card shadow="never" class="stat"><div class="num warn">{{ summary ? summary.severityCounts.CRITICAL + summary.severityCounts.HIGH : '-' }}</div><div class="lbl">严重 / 高危</div></el-card></el-col>
+          <el-col :span="6"><el-card shadow="never" class="stat"><div class="num warn">{{ summary ? summary.licenseRiskCounts.HIGH : '-' }}</div><div class="lbl">许可证高风险</div></el-card></el-col>
+        </el-row>
+        <el-card shadow="never" class="card">
+          <el-tabs v-model="tab" @tab-change="handleTab">
+            <el-tab-pane label="漏洞" name="vuln">
+              <el-table v-loading="vulnLoading" :data="vuln.records" stripe size="small">
+                <el-table-column prop="cveId" label="CVE" width="170" />
+                <el-table-column prop="cvssScore" label="CVSS" width="80" />
+                <el-table-column label="等级" width="110"><template #default="{ row }"><el-tag size="small" effect="light">{{ row.severity || 'UNKNOWN' }}</el-tag></template></el-table-column>
+                <el-table-column label="依赖" min-width="220" show-overflow-tooltip><template #default="{ row }">{{ row.dependencyName || '-' }}<span v-if="row.dependencyVersion" class="muted">:{{ row.dependencyVersion }}</span></template></el-table-column>
+                <el-table-column prop="cwe" label="CWE" width="110" show-overflow-tooltip />
+              </el-table>
+              <el-pagination class="pager" layout="total, prev, pager, next" :total="vuln.total" :page-size="vuln.size" :current-page="vuln.page" @current-change="loadVulns" />
+            </el-tab-pane>
+            <el-tab-pane label="依赖" name="dep">
+              <el-table v-loading="depLoading" :data="dep.records" stripe size="small">
+                <el-table-column prop="name" label="依赖" min-width="240" show-overflow-tooltip />
+                <el-table-column prop="version" label="版本" width="150" show-overflow-tooltip />
+                <el-table-column prop="licenseName" label="许可证" width="150" show-overflow-tooltip />
+                <el-table-column label="风险" width="100"><template #default="{ row }"><el-tag size="small" effect="light">{{ row.licenseRisk || 'UNKNOWN' }}</el-tag></template></el-table-column>
+                <el-table-column prop="vulnerabilityCount" label="漏洞" width="80" />
+              </el-table>
+              <el-pagination class="pager" layout="total, prev, pager, next" :total="dep.total" :page-size="dep.size" :current-page="dep.page" @current-change="loadDeps" />
+            </el-tab-pane>
+          </el-tabs>
+        </el-card>
+      </template>
+      <el-card v-else shadow="never" class="card">
         <template #header><span class="card-title">扫描结果</span></template>
-        <el-empty description="依赖清单 / 漏洞清单 / 许可证合规将在 D10 接入（数据已在 dependency、vulnerability 表中）">
-          <el-tag effect="plain" type="info">D10 交付</el-tag>
-        </el-empty>
+        <el-empty description="任务结束后这里会展示漏洞、依赖与许可证结果" />
       </el-card>
     </template>
   </div>
@@ -253,5 +342,33 @@ async function handleRescan() {
 .card-title {
   font-weight: 600;
   color: #303133;
+}
+.stat {
+  text-align: center;
+}
+
+.num {
+  font-size: 26px;
+  font-weight: 700;
+  color: #303133;
+}
+
+.num.danger {
+  color: #f56c6c;
+}
+
+.num.warn {
+  color: #e6a23c;
+}
+
+.lbl {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.pager {
+  margin-top: 12px;
+  justify-content: flex-end;
 }
 </style>

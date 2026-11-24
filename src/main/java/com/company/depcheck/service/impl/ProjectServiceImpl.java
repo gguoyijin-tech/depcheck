@@ -22,7 +22,9 @@ import org.springframework.web.multipart.MultipartFile;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.depcheck.common.exception.BusinessException;
 import com.company.depcheck.common.result.ResultCode;
+import com.company.depcheck.common.util.SessionUtils;
 import com.company.depcheck.common.util.ZipUtils;
+import com.company.depcheck.config.RetentionProperties;
 import com.company.depcheck.config.UploadProperties;
 import com.company.depcheck.mapper.ProjectMapper;
 import com.company.depcheck.model.entity.Project;
@@ -51,16 +53,12 @@ public class ProjectServiceImpl implements ProjectService {
     /** 解压子目录名。 */
     private static final String DATA_DIR_NAME = "data";
 
-    /** 默认会话标识。 */
-    private static final String DEFAULT_SESSION = "default";
-
     /** ZIP 魔数长度。 */
     private static final int MAGIC_LEN = 4;
 
     /** 数据库列长度上限。 */
     private static final int MAX_NAME_LEN = 128;
     private static final int MAX_ORIG_NAME_LEN = 255;
-    private static final int MAX_SESSION_LEN = 64;
 
     /** 列表默认返回上限（防止无界全表查询）。 */
     private static final String LIMIT_SQL = "LIMIT 200";
@@ -70,16 +68,20 @@ public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectMapper projectMapper;
     private final UploadProperties uploadProperties;
+    private final RetentionProperties retentionProperties;
 
     /**
-     * 构造注入 Mapper 与上传配置。
+     * 构造注入 Mapper、上传配置与保留策略。
      *
-     * @param projectMapper    项目表 Mapper
-     * @param uploadProperties 上传配置
+     * @param projectMapper       项目表 Mapper
+     * @param uploadProperties    上传配置
+     * @param retentionProperties 保留策略（决定项目的 expire_at）
      */
-    public ProjectServiceImpl(ProjectMapper projectMapper, UploadProperties uploadProperties) {
+    public ProjectServiceImpl(ProjectMapper projectMapper, UploadProperties uploadProperties,
+                              RetentionProperties retentionProperties) {
         this.projectMapper = projectMapper;
         this.uploadProperties = uploadProperties;
+        this.retentionProperties = retentionProperties;
     }
 
     @Override
@@ -91,7 +93,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public List<Project> listBySession(String sessionId) {
-        String normalizedSession = normalizeSession(sessionId);
+        String normalizedSession = SessionUtils.normalize(sessionId);
         return projectMapper.selectList(new LambdaQueryWrapper<Project>()
                 .eq(Project::getOwnerSession, normalizedSession)
                 .orderByDesc(Project::getId)
@@ -112,7 +114,7 @@ public class ProjectServiceImpl implements ProjectService {
             return null;
         }
         Project project = projectMapper.selectById(id);
-        String normalizedSession = normalizeSession(sessionId);
+        String normalizedSession = SessionUtils.normalize(sessionId);
         if (project == null || !normalizedSession.equals(project.getOwnerSession())) {
             return null;
         }
@@ -131,7 +133,7 @@ public class ProjectServiceImpl implements ProjectService {
                 || !originalName.toLowerCase(Locale.ROOT).endsWith(ZIP_SUFFIX)) {
             throw new BusinessException(ResultCode.INVALID_ZIP);
         }
-        String normalizedSession = normalizeSession(sessionId);
+        String normalizedSession = SessionUtils.normalize(sessionId);
 
         // ② 魔数校验：扩展名可以改，文件头改不了
         byte[] head = new byte[MAGIC_LEN];
@@ -166,13 +168,19 @@ public class ProjectServiceImpl implements ProjectService {
                     uploadProperties.getMaxFileCount());
 
             Project project = new Project();
+            LocalDateTime now = LocalDateTime.now();
             project.setName(truncate(stripZipSuffix(originalName), MAX_NAME_LEN));
             project.setOriginalName(originalName);
             project.setStoragePath(dataDir.toString());
             project.setSizeBytes(file.getSize());
             project.setFileCount(fileCount);
             project.setOwnerSession(normalizedSession);
-            project.setCreatedAt(LocalDateTime.now());
+            project.setCreatedAt(now);
+            // 过期时间：到期后由 StorageCleaner 清目录并删项目（外键级联清任务与明细）
+            // projectDays <= 0 表示不自动清理历史，保持 expire_at 为 NULL
+            if (retentionProperties.getProjectDays() > 0) {
+                project.setExpireAt(now.plusDays(retentionProperties.getProjectDays()));
+            }
             projectMapper.insert(project);
 
             LOG.info("项目上传成功 projectId={} name={} files={} sizeBytes={}",
@@ -194,18 +202,6 @@ public class ProjectServiceImpl implements ProjectService {
     private String stripZipSuffix(String name) {
         int idx = name.toLowerCase(Locale.ROOT).lastIndexOf(ZIP_SUFFIX);
         return idx > 0 ? name.substring(0, idx) : name;
-    }
-
-    /** 校验并归一化 sessionId。 */
-    private String normalizeSession(String sessionId) {
-        if (!StringUtils.hasText(sessionId)) {
-            return DEFAULT_SESSION;
-        }
-        String trimmed = sessionId.trim();
-        if (trimmed.length() > MAX_SESSION_LEN) {
-            throw new BusinessException(ResultCode.PARAM_INVALID);
-        }
-        return trimmed;
     }
 
     /** 截断超长字符串。 */

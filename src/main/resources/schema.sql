@@ -72,3 +72,52 @@ ALTER TABLE scan_task ADD COLUMN IF NOT EXISTS stage VARCHAR(32) NULL;
 -- 按状态查任务（D9 列表页要用）
 CREATE INDEX IF NOT EXISTS idx_task_status ON scan_task (status);
 CREATE INDEX IF NOT EXISTS idx_task_project ON scan_task (project_id);
+
+-- ============================================================================
+-- D10：数据库层兜底（关键约束不靠代码判断）
+-- 说明：
+--   1) 全部用 IF NOT EXISTS，schema.sql 每次启动都会执行，必须幂等；
+--   2) 加约束前先查过脏数据（重复明细 / 孤儿行 / 非法状态），当前库为 0；
+--   3) 状态机同样靠库层兜底：所有状态写入都是 "UPDATE ... WHERE status=?"。
+-- ============================================================================
+
+-- ① 取值域：状态 / 阶段 / 进度 / 取消标记 / 耗时
+ALTER TABLE scan_task ADD CONSTRAINT IF NOT EXISTS ck_task_status
+    CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELED'));
+ALTER TABLE scan_task ADD CONSTRAINT IF NOT EXISTS ck_task_progress
+    CHECK (progress BETWEEN 0 AND 100);
+ALTER TABLE scan_task ADD CONSTRAINT IF NOT EXISTS ck_task_cancel
+    CHECK (cancel_requested IN (0, 1));
+ALTER TABLE scan_task ADD CONSTRAINT IF NOT EXISTS ck_task_duration
+    CHECK (duration_ms IS NULL OR duration_ms >= 0);
+ALTER TABLE scan_task ADD CONSTRAINT IF NOT EXISTS ck_task_stage
+    CHECK (stage IS NULL OR stage IN ('QUEUED', 'PREPARE', 'SCAN', 'ANALYZE',
+                                      'REPORT', 'PERSIST', 'DONE', 'FAILED', 'CANCELED', 'TIMEOUT'));
+
+-- ② 唯一性：任务号防重复（重放/重试）；项目目录不可被两个项目引用
+CREATE UNIQUE INDEX IF NOT EXISTS uk_task_no      ON scan_task (task_no);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_project_path ON project (storage_path);
+
+-- ③ 外键 + 级联：明细不许挂到不存在的任务；删任务/删项目自动清明细
+ALTER TABLE scan_task ADD CONSTRAINT IF NOT EXISTS fk_task_project
+    FOREIGN KEY (project_id) REFERENCES project (id) ON DELETE CASCADE;
+ALTER TABLE dependency ADD CONSTRAINT IF NOT EXISTS fk_dep_task
+    FOREIGN KEY (task_id) REFERENCES scan_task (id) ON DELETE CASCADE;
+ALTER TABLE vulnerability ADD CONSTRAINT IF NOT EXISTS fk_vuln_task
+    FOREIGN KEY (task_id) REFERENCES scan_task (id) ON DELETE CASCADE;
+ALTER TABLE vulnerability ADD CONSTRAINT IF NOT EXISTS fk_vuln_dep
+    FOREIGN KEY (dependency_id) REFERENCES dependency (id) ON DELETE CASCADE;
+
+-- ④ 明细去重：同一任务里同一文件只允许一行；同一依赖同一 CVE 只允许一行
+--    （file_path 为 NULL 的行不受限：H2 把 NULL 视为互不相同）
+CREATE UNIQUE INDEX IF NOT EXISTS uk_dep_task_file ON dependency (task_id, file_path);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_vuln_task_cve ON vulnerability (task_id, dependency_id, cve_id);
+
+-- ⑤ 其余取值域
+ALTER TABLE dependency ADD CONSTRAINT IF NOT EXISTS ck_dep_risk
+    CHECK (license_risk IN ('HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'));
+ALTER TABLE vulnerability ADD CONSTRAINT IF NOT EXISTS ck_vuln_suppressed
+    CHECK (suppressed IN (0, 1));
+ALTER TABLE vulnerability ADD CONSTRAINT IF NOT EXISTS ck_vuln_score
+    CHECK (cvss_score IS NULL OR (cvss_score >= 0 AND cvss_score <= 10));
+

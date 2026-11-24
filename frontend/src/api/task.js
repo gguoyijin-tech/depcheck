@@ -27,3 +27,23 @@ export function listTasks(status) {
 export function cancelTask(id) {
   return http.post(`/scan-tasks/${id}/cancel`)
 }
+
+/** 下载该任务的 HTML 报告（返回 Blob）。 */
+export function downloadReport(id) {
+  return http.get(`/scan-tasks/${id}/report`, { responseType: 'blob', timeout: 120000 })
+}
+
+/** 结果概览：依赖数、漏洞数、等级与许可证分布。 */
+export function getSummary(id) {
+  return http.get(`/scan-tasks/${id}/summary`)
+}
+
+/** 依赖分页。 */
+export function listDependencies(id, query = {}) {
+  return http.get(`/scan-tasks/${id}/dependencies`, { params: query })
+}
+
+/** 漏洞分页（按 CVSS 降序）。 */
+export function listVulnerabilities(id, query = {}) {
+  return http.get(`/scan-tasks/${id}/vulnerabilities`, { params: query })
+}

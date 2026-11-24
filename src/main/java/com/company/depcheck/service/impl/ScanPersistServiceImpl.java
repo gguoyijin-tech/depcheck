@@ -1,5 +1,6 @@
 package com.company.depcheck.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.company.depcheck.common.constant.TaskStage;
@@ -9,7 +10,9 @@ import com.company.depcheck.common.result.ResultCode;
 import com.company.depcheck.engine.report.DependencyJson;
 import com.company.depcheck.engine.report.ReportJson;
 import com.company.depcheck.engine.report.VulnerabilityJson;
+import com.company.depcheck.mapper.DependencyMapper;
 import com.company.depcheck.mapper.ScanTaskMapper;
+import com.company.depcheck.mapper.VulnerabilityMapper;
 import com.company.depcheck.model.entity.Dependency;
 import com.company.depcheck.model.entity.ScanTask;
 import com.company.depcheck.model.entity.Vulnerability;
@@ -50,13 +53,22 @@ public class ScanPersistServiceImpl implements ScanPersistService {
 
     private final ScanTaskMapper scanTaskMapper;
 
+    private final DependencyMapper dependencyMapper;
+
+    private final VulnerabilityMapper vulnerabilityMapper;
+
     /**
      * 构造注入。
      *
-     * @param scanTaskMapper 任务 Mapper
+     * @param scanTaskMapper      任务 Mapper
+     * @param dependencyMapper    依赖 Mapper（幂等重入时先清旧明细）
+     * @param vulnerabilityMapper 漏洞 Mapper
      */
-    public ScanPersistServiceImpl(ScanTaskMapper scanTaskMapper) {
+    public ScanPersistServiceImpl(ScanTaskMapper scanTaskMapper, DependencyMapper dependencyMapper,
+                                  VulnerabilityMapper vulnerabilityMapper) {
         this.scanTaskMapper = scanTaskMapper;
+        this.dependencyMapper = dependencyMapper;
+        this.vulnerabilityMapper = vulnerabilityMapper;
     }
 
     @Override
@@ -65,6 +77,9 @@ public class ScanPersistServiceImpl implements ScanPersistService {
         LocalDateTime now = LocalDateTime.now();
         List<DependencyJson> deps = report.getDependencies() == null ? List.of() : report.getDependencies();
 
+        // 幂等：同一任务重复入库时先清旧明细（唯一索引 uk_dep_task_file / uk_vuln_task_cve 兜底）
+        clearDetails(taskId);
+
         int depCount = saveDependencies(taskId, deps, now);
         int vulnCount = saveVulnerabilities(taskId, deps, now);
 
@@ -72,6 +87,18 @@ public class ScanPersistServiceImpl implements ScanPersistService {
 
         LOG.info("入库完成 taskId={} deps={} vulns={}", taskId, depCount, vulnCount);
         return depCount;
+    }
+
+    /**
+     * 清掉该任务已有的明细（先漏洞后依赖，与级联方向一致）。
+     *
+     * @param taskId 任务 ID
+     */
+    private void clearDetails(Long taskId) {
+        vulnerabilityMapper.delete(new LambdaQueryWrapper<Vulnerability>()
+                .eq(Vulnerability::getTaskId, taskId));
+        dependencyMapper.delete(new LambdaQueryWrapper<Dependency>()
+                .eq(Dependency::getTaskId, taskId));
     }
 
     /**

@@ -14,14 +14,14 @@ const activePath = computed(() => (route.path.startsWith('/tasks') ? '/tasks' : 
 async function handleLogout() {
   try {
     await ElMessageBox.confirm(
-      '退出后本地会话标识会被清除，用同一浏览器就看不到本次上传的项目了。',
+      '退出后需要重新登录；账号下的项目与报告仍会保留。',
       '确认退出',
       { type: 'warning', confirmButtonText: '退出', cancelButtonText: '取消' }
     )
   } catch {
     return
   }
-  session.logout()
+  await session.logout()
   router.push({ name: 'login' })
 }
 </script>
@@ -32,8 +32,7 @@ async function handleLogout() {
       <div class="brand">
         <span class="brand-dot" />
         <span class="brand-name">应用依赖安全与合规分析</span>
-        <el-tag size="small" type="info" effect="plain">D9</el-tag>
-      </div>
+        </div>
 
       <nav v-if="session.loggedIn" class="nav">
         <router-link to="/tasks" :class="['nav-link', { active: activePath === '/tasks' }]">
@@ -42,10 +41,13 @@ async function handleLogout() {
         <router-link to="/scan/new" :class="['nav-link', { active: activePath === '/scan/new' }]">
           上传与扫描
         </router-link>
+        <router-link to="/reports" :class="['nav-link', { active: activePath === '/reports' }]">
+          报告下载
+        </router-link>
       </nav>
 
       <div v-if="session.loggedIn" class="user">
-        <span class="user-name">{{ session.nickname }}</span>
+        <span class="user-name">{{ session.username }}</span>
         <el-button link type="primary" @click="handleLogout">退出</el-button>
       </div>
     </el-header>

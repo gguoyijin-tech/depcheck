@@ -62,3 +62,20 @@ depcheck:
       queue: 8
     # 官方 CLI 路径：仅一致性自检（/api/dev/parity）使用
     cli-path: D:/dc/dependency-check/bin/dependency-check.bat
+
+  # 数据保留：报告与解压目录都是可再生的中间产物，按天清（见 06 §3.3）
+  retention:
+    # 失败任务的报告目录保留时长（分钟）：留现场排障，但要有上限
+    failed-report-minutes: 1440
+    # 成功任务的报告目录保留天数（报告可重扫再生）
+    success-report-days: 7
+    # 项目保留天数（到期后连解压目录、任务、明细一起清）；<=0 表示不自动清理
+    project-days: 30
+    # 清理任务执行时间；验收时可临时改成 "0 * * * * ?"（每分钟）
+    purge-cron: "0 30 2 * * ?"
+  # 登录（计划 5.9：一期固定账号；上线前务必改掉默认密码）
+  auth:
+    username: depcheck
+    password: Depcheck@2026
+    # token 有效期（小时）
+    token-ttl-hours: 12

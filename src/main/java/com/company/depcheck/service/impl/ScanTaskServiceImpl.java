@@ -1,5 +1,7 @@
 package com.company.depcheck.service.impl;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -17,12 +19,15 @@ import com.company.depcheck.common.constant.TaskStage;
 import com.company.depcheck.common.constant.TaskStatus;
 import com.company.depcheck.common.exception.BusinessException;
 import com.company.depcheck.common.result.ResultCode;
+import com.company.depcheck.common.util.SessionUtils;
+import com.company.depcheck.config.ScanProperties;
 import com.company.depcheck.mapper.ProjectMapper;
 import com.company.depcheck.mapper.ScanTaskMapper;
 import com.company.depcheck.model.entity.Project;
 import com.company.depcheck.model.entity.ScanTask;
 import com.company.depcheck.model.vo.ScanTaskVO;
 import com.company.depcheck.service.ScanTaskService;
+import com.company.depcheck.service.support.TaskAccessGuard;
 import com.company.depcheck.task.ScanTaskDispatcher;
 
 /**
@@ -39,14 +44,11 @@ public class ScanTaskServiceImpl implements ScanTaskService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ScanTaskServiceImpl.class);
 
+    /** 引擎产出的 HTML 报告文件名。 */
+    private static final String REPORT_FILE_NAME = "dependency-check-report.html";
+
     /** 任务号长度（够用且好复制）。 */
     private static final int TASK_NO_LENGTH = 16;
-
-    /** 会话标识最大长度，与 project.owner_session 一致。 */
-    private static final int MAX_SESSION_LEN = 64;
-
-    /** 默认会话标识。 */
-    private static final String DEFAULT_SESSION = "default";
 
     /** 列表返回上限（项目还没引入分页插件）。 */
     private static final String LIMIT_SQL = "LIMIT 200";
@@ -71,23 +73,31 @@ public class ScanTaskServiceImpl implements ScanTaskService {
 
     private final ScanTaskDispatcher dispatcher;
 
+    private final TaskAccessGuard taskAccessGuard;
+
+    private final ScanProperties scanProperties;
+
     /**
      * 构造注入。
      *
-     * @param scanTaskMapper 任务 Mapper
-     * @param projectMapper  项目 Mapper
-     * @param dispatcher     任务调度器
+     * @param scanTaskMapper  任务 Mapper
+     * @param projectMapper   项目 Mapper
+     * @param dispatcher      任务调度器
+     * @param taskAccessGuard 任务归属校验
      */
     public ScanTaskServiceImpl(ScanTaskMapper scanTaskMapper, ProjectMapper projectMapper,
-                               ScanTaskDispatcher dispatcher) {
+                               ScanTaskDispatcher dispatcher, TaskAccessGuard taskAccessGuard,
+                               ScanProperties scanProperties) {
         this.scanTaskMapper = scanTaskMapper;
         this.projectMapper = projectMapper;
         this.dispatcher = dispatcher;
+        this.taskAccessGuard = taskAccessGuard;
+        this.scanProperties = scanProperties;
     }
 
     @Override
     public ScanTaskVO create(Long projectId, String sessionId) {
-        String normalized = normalizeSession(sessionId);
+        String normalized = SessionUtils.normalize(sessionId);
         Project project = projectId == null ? null : projectMapper.selectById(projectId);
         if (project == null || !normalized.equals(project.getOwnerSession())) {
             throw new BusinessException(ResultCode.NOT_FOUND);
@@ -111,12 +121,12 @@ public class ScanTaskServiceImpl implements ScanTaskService {
 
     @Override
     public ScanTaskVO getById(Long id, String sessionId) {
-        return toVo(loadOwned(id, sessionId));
+        return toVo(taskAccessGuard.loadOwned(id, sessionId));
     }
 
     @Override
     public List<ScanTaskVO> list(String sessionId, String status) {
-        String normalized = normalizeSession(sessionId);
+        String normalized = SessionUtils.normalize(sessionId);
         String statusFilter = normalizeStatus(status);
 
         List<Project> projects = projectMapper.selectList(new LambdaQueryWrapper<Project>()
@@ -139,7 +149,7 @@ public class ScanTaskServiceImpl implements ScanTaskService {
 
     @Override
     public void cancel(Long id, String sessionId) {
-        ScanTask task = loadOwned(id, sessionId);
+        ScanTask task = taskAccessGuard.loadOwned(id, sessionId);
         if (FINAL_STATUS.contains(task.getStatus())) {
             throw new BusinessException(ResultCode.PARAM_INVALID.getCode(), "任务已结束，无法取消");
         }
@@ -172,34 +182,6 @@ public class ScanTaskServiceImpl implements ScanTaskService {
                 id, task.getStage(), task.getProgress());
     }
 
-    /** 查任务并校验会话归属；不是自己的任务一律按"不存在"处理，不泄露存在性。 */
-    private ScanTask loadOwned(Long id, String sessionId) {
-        if (id == null) {
-            throw new BusinessException(ResultCode.NOT_FOUND);
-        }
-        ScanTask task = scanTaskMapper.selectById(id);
-        if (task == null) {
-            throw new BusinessException(ResultCode.NOT_FOUND);
-        }
-        Project project = projectMapper.selectById(task.getProjectId());
-        if (project == null || !normalizeSession(sessionId).equals(project.getOwnerSession())) {
-            throw new BusinessException(ResultCode.NOT_FOUND);
-        }
-        return task;
-    }
-
-    /** 校验并归一化 sessionId。 */
-    private String normalizeSession(String sessionId) {
-        if (!StringUtils.hasText(sessionId)) {
-            return DEFAULT_SESSION;
-        }
-        String trimmed = sessionId.trim();
-        if (trimmed.length() > MAX_SESSION_LEN) {
-            throw new BusinessException(ResultCode.PARAM_INVALID);
-        }
-        return trimmed;
-    }
-
     /** 校验状态过滤值，非法值直接 1001，避免静默返回空列表。 */
     private String normalizeStatus(String status) {
         if (!StringUtils.hasText(status)) {
@@ -225,6 +207,8 @@ public class ScanTaskServiceImpl implements ScanTaskService {
         vo.setErrorCode(task.getErrorCode());
         vo.setErrorMsg(task.getErrorMsg());
         vo.setCreatedAt(task.getCreatedAt());
+        vo.setHasReport(Files.isRegularFile(Path.of(scanProperties.getReportRoot(),
+                task.getTaskNo(), REPORT_FILE_NAME)));
         return vo;
     }
 }
